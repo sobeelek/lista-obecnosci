@@ -71,7 +71,7 @@ class AttendanceManager {
         const phoneInput = document.getElementById('personPhone');
         
         const name = nameInput.value.trim();
-        const age = parseInt(ageInput.value);
+        const ageValue = ageInput.value.trim();
         const phone = phoneInput.value.trim();
 
         if (!name) {
@@ -79,14 +79,14 @@ class AttendanceManager {
             return;
         }
 
-        if (isNaN(age) || age < 1 || age > 120) {
-            this.showNotification('Wprowadź prawidłowy wiek (1-120 lat)!', 'error');
-            return;
-        }
-
-        if (!phone) {
-            this.showNotification('Wprowadź numer telefonu!', 'error');
-            return;
+        // Wiek jest opcjonalny - sprawdź tylko jeśli został wprowadzony
+        let age = null;
+        if (ageValue) {
+            age = parseInt(ageValue);
+            if (isNaN(age) || age < 1 || age > 120) {
+                this.showNotification('Wprowadź prawidłowy wiek (1-120 lat) lub zostaw puste!', 'error');
+                return;
+            }
         }
 
         if (this.people.some(person => person.name.toLowerCase() === name.toLowerCase())) {
@@ -98,7 +98,7 @@ class AttendanceManager {
             id: Date.now(),
             name: name,
             age: age,
-            phone: phone,
+            phone: phone || '',
             present: false,
             addedAt: new Date().toISOString()
         };
@@ -111,6 +111,10 @@ class AttendanceManager {
         nameInput.value = '';
         ageInput.value = '';
         phoneInput.value = '';
+        
+        // Przejdź z powrotem do pierwszego pola
+        nameInput.focus();
+        
         this.showNotification(name + ' został(a) dodany(a) do listy!', 'success');
     }
     toggleAttendance(id) {
@@ -128,6 +132,102 @@ class AttendanceManager {
             }
         } else {
             this.showNotification('Wybierz datę aby zaznaczyć obecność!', 'error');
+        }
+    }
+
+    editPerson(id) {
+        const person = this.people.find(p => p.id === id);
+        if (!person) return;
+
+        // Pokaż modal edycji
+        this.showEditModal(person);
+    }
+
+    showEditModal(person) {
+        // Utwórz modal edycji
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Edytuj osobę</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editName">Imię i nazwisko:</label>
+                        <input type="text" id="editName" value="${this.escapeHtml(person.name)}" maxlength="50" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editAge">Wiek:</label>
+                        <input type="number" id="editAge" value="${person.age || ''}" min="1" max="120">
+                    </div>
+                    <div class="form-group">
+                        <label for="editPhone">Numer telefonu:</label>
+                        <input type="tel" id="editPhone" value="${this.escapeHtml(person.phone || '')}" maxlength="15">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+                    <button class="btn btn-primary" onclick="attendanceManager.saveEdit(${person.id})">Zapisz</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Fokus na pierwszym polu
+        setTimeout(() => {
+            document.getElementById('editName').focus();
+        }, 100);
+    }
+
+    saveEdit(id) {
+        const nameInput = document.getElementById('editName');
+        const ageInput = document.getElementById('editAge');
+        const phoneInput = document.getElementById('editPhone');
+        
+        const name = nameInput.value.trim();
+        const ageValue = ageInput.value.trim();
+        const phone = phoneInput.value.trim();
+
+        if (!name) {
+            this.showNotification('Wprowadź imię i nazwisko!', 'error');
+            return;
+        }
+
+        // Wiek jest opcjonalny - sprawdź tylko jeśli został wprowadzony
+        let age = null;
+        if (ageValue) {
+            age = parseInt(ageValue);
+            if (isNaN(age) || age < 1 || age > 120) {
+                this.showNotification('Wprowadź prawidłowy wiek (1-120 lat) lub zostaw puste!', 'error');
+                return;
+            }
+        }
+
+        // Sprawdź czy nazwa nie jest już używana przez inną osobę
+        const existingPerson = this.people.find(p => p.id !== id && p.name.toLowerCase() === name.toLowerCase());
+        if (existingPerson) {
+            this.showNotification('Osoba o tym imieniu już istnieje!', 'error');
+            return;
+        }
+
+        // Znajdź i zaktualizuj osobę
+        const person = this.people.find(p => p.id === id);
+        if (person) {
+            person.name = name;
+            person.age = age;
+            person.phone = phone || '';
+            
+            this.saveGroupData();
+            this.render();
+            this.updateStats();
+            
+            // Zamknij modal
+            document.querySelector('.modal-overlay').remove();
+            
+            this.showNotification(name + ' został(a) zaktualizowany(a)!', 'success');
         }
     }
 
@@ -217,14 +317,26 @@ class AttendanceManager {
     }
     getFilteredPeople(peopleList = null) {
         const people = peopleList || this.people;
+        let filtered;
         switch (this.currentFilter) {
             case 'present':
-                return people.filter(person => person.present);
+                filtered = people.filter(person => person.present);
+                break;
             case 'absent':
-                return people.filter(person => !person.present);
+                filtered = people.filter(person => !person.present);
+                break;
             default:
-                return people;
+                filtered = people;
         }
+        
+        // Sortuj alfabetycznie po nazwisku (ostatnie słowo)
+        return filtered.sort((a, b) => {
+            const getLastName = (name) => {
+                const parts = name.trim().split(' ');
+                return parts[parts.length - 1].toLowerCase();
+            };
+            return getLastName(a.name).localeCompare(getLastName(b.name), 'pl');
+        });
     }
 
     render() {
@@ -250,8 +362,8 @@ class AttendanceManager {
                 '<div class="person-info">' +
                     '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
                     '<div class="person-details">' +
-                        '<span class="person-age">👤 ' + person.age + ' lat</span>' +
-                        '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' +
+                        (person.age && person.age !== null ? '<span class="person-age">👤 ' + person.age + ' lat</span>' : '') +
+                        (person.phone && person.phone !== '' ? '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' : '') +
                     '</div>' +
                     '<span class="status-badge ' + (person.present ? 'present' : 'absent') + '">' +
                         (person.present ? 'Obecny' : 'Nieobecny') +
@@ -261,6 +373,9 @@ class AttendanceManager {
                     '<button class="toggle-btn ' + (person.present ? 'toggle-absent' : 'toggle-present') + '" ' +
                             'onclick="attendanceManager.toggleAttendance(' + person.id + ')">' +
                         (person.present ? 'Oznacz jako nieobecny' : 'Oznacz jako obecny') +
+                    '</button>' +
+                    '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">' +
+                        'Edytuj' +
                     '</button>' +
                     '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
                         'Usun' +
@@ -275,12 +390,15 @@ class AttendanceManager {
                     '<div class="person-info">' +
                         '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
                         '<div class="person-details">' +
-                            '<span class="person-age">👤 ' + person.age + ' lat</span>' +
-                            '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' +
+                            (person.age && person.age !== null ? '<span class="person-age">👤 ' + person.age + ' lat</span>' : '') +
+                            (person.phone && person.phone !== '' ? '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' : '') +
                         '</div>' +
                         '<span class="info-text">Wybierz datę aby zaznaczyć obecność</span>' +
                     '</div>' +
                     '<div class="person-actions">' +
+                        '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">' +
+                            'Edytuj' +
+                        '</button>' +
                         '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
                             'Usun' +
                         '</button>' +
@@ -345,7 +463,9 @@ class AttendanceManager {
         peopleToExport.forEach(person => {
             const status = person.present ? 'Obecny' : 'Nieobecny';
             const addedDate = new Date(person.addedAt).toLocaleDateString('pl-PL');
-            csvContent += '"' + person.name + '","' + person.age + '","' + person.phone + '","' + status + '","' + addedDate + '"\n';
+            const age = (person.age && person.age !== null) ? person.age : 'Brak danych';
+            const phone = (person.phone && person.phone !== '') ? person.phone : 'Brak danych';
+            csvContent += '"' + person.name + '","' + age + '","' + phone + '","' + status + '","' + addedDate + '"\n';
         });
 
         const present = peopleToExport.filter(p => p.present).length;
@@ -669,7 +789,7 @@ class AttendanceManager {
                 id: person.id,
                 name: person.name,
                 age: person.age,
-                phone: person.phone,
+                phone: person.phone || '',
                 present: false,
                 addedAt: person.addedAt
             }));
@@ -688,7 +808,7 @@ class AttendanceManager {
                         id: person.id,
                         name: person.name,
                         age: person.age,
-                        phone: person.phone,
+                        phone: person.phone || '',
                         present: false,
                         addedAt: person.addedAt
                     });
@@ -721,7 +841,7 @@ class AttendanceManager {
                     id: person.id,
                     name: person.name,
                     age: person.age,
-                    phone: person.phone,
+                    phone: person.phone || '',
                     present: person.present,
                     addedAt: person.addedAt
                 }));
