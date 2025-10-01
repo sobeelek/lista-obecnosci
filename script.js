@@ -41,6 +41,12 @@ class AttendanceManager {
         document.getElementById('personName').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addPerson();
         });
+        document.getElementById('personAge').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addPerson();
+        });
+        document.getElementById('personPhone').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addPerson();
+        });
         document.getElementById('showAll').addEventListener('click', () => this.setFilter('all'));
         document.getElementById('showPresent').addEventListener('click', () => this.setFilter('present'));
         document.getElementById('showAbsent').addEventListener('click', () => this.setFilter('absent'));
@@ -61,21 +67,38 @@ class AttendanceManager {
         }
 
         const nameInput = document.getElementById('personName');
+        const ageInput = document.getElementById('personAge');
+        const phoneInput = document.getElementById('personPhone');
+        
         const name = nameInput.value.trim();
+        const age = parseInt(ageInput.value);
+        const phone = phoneInput.value.trim();
 
         if (!name) {
-            this.showNotification('Wprowadz imie osoby!', 'error');
+            this.showNotification('Wprowadź imię i nazwisko!', 'error');
+            return;
+        }
+
+        if (isNaN(age) || age < 1 || age > 120) {
+            this.showNotification('Wprowadź prawidłowy wiek (1-120 lat)!', 'error');
+            return;
+        }
+
+        if (!phone) {
+            this.showNotification('Wprowadź numer telefonu!', 'error');
             return;
         }
 
         if (this.people.some(person => person.name.toLowerCase() === name.toLowerCase())) {
-            this.showNotification('Osoba o tym imieniu juz istnieje!', 'error');
+            this.showNotification('Osoba o tym imieniu już istnieje!', 'error');
             return;
         }
 
         const newPerson = {
             id: Date.now(),
             name: name,
+            age: age,
+            phone: phone,
             present: false,
             addedAt: new Date().toISOString()
         };
@@ -86,7 +109,9 @@ class AttendanceManager {
         this.updateStats();
         
         nameInput.value = '';
-        this.showNotification(name + ' zostal(a) dodany(a) do listy!', 'success');
+        ageInput.value = '';
+        phoneInput.value = '';
+        this.showNotification(name + ' został(a) dodany(a) do listy!', 'success');
     }
     toggleAttendance(id) {
         // Toggle obecności działa tylko gdy jest wybrana data
@@ -224,6 +249,10 @@ class AttendanceManager {
             return '<div class="person-item ' + (person.present ? 'present' : 'absent') + '">' +
                 '<div class="person-info">' +
                     '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
+                    '<div class="person-details">' +
+                        '<span class="person-age">👤 ' + person.age + ' lat</span>' +
+                        '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' +
+                    '</div>' +
                     '<span class="status-badge ' + (person.present ? 'present' : 'absent') + '">' +
                         (person.present ? 'Obecny' : 'Nieobecny') +
                     '</span>' +
@@ -245,6 +274,10 @@ class AttendanceManager {
                 return '<div class="person-item general-list">' +
                     '<div class="person-info">' +
                         '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
+                        '<div class="person-details">' +
+                            '<span class="person-age">👤 ' + person.age + ' lat</span>' +
+                            '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' +
+                        '</div>' +
                         '<span class="info-text">Wybierz datę aby zaznaczyć obecność</span>' +
                     '</div>' +
                     '<div class="person-actions">' +
@@ -307,12 +340,12 @@ class AttendanceManager {
         }
         
         let csvContent = 'Lista Obecnosci - ' + exportDate + ' ' + time + '\n\n';
-        csvContent += 'Imie,Status,Data dodania\n';
+        csvContent += 'Imie,Wiek,Telefon,Status,Data dodania\n';
         
         peopleToExport.forEach(person => {
             const status = person.present ? 'Obecny' : 'Nieobecny';
             const addedDate = new Date(person.addedAt).toLocaleDateString('pl-PL');
-            csvContent += '"' + person.name + '","' + status + '","' + addedDate + '"\n';
+            csvContent += '"' + person.name + '","' + person.age + '","' + person.phone + '","' + status + '","' + addedDate + '"\n';
         });
 
         const present = peopleToExport.filter(p => p.present).length;
@@ -635,6 +668,8 @@ class AttendanceManager {
             groupData.attendanceData[date.date] = this.people.map(person => ({
                 id: person.id,
                 name: person.name,
+                age: person.age,
+                phone: person.phone,
                 present: false,
                 addedAt: person.addedAt
             }));
@@ -652,6 +687,8 @@ class AttendanceManager {
                     existingData.push({
                         id: person.id,
                         name: person.name,
+                        age: person.age,
+                        phone: person.phone,
                         present: false,
                         addedAt: person.addedAt
                     });
@@ -683,6 +720,8 @@ class AttendanceManager {
                 this.groupData[this.selectedGroup].attendanceData[date.date] = this.currentDateAttendance.map(person => ({
                     id: person.id,
                     name: person.name,
+                    age: person.age,
+                    phone: person.phone,
                     present: person.present,
                     addedAt: person.addedAt
                 }));
