@@ -64,6 +64,12 @@ class AttendanceManager {
             return;
         }
 
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canAdd()) {
+            this.showNotification('Brak uprawnień do dodawania osób!', 'error');
+            return;
+        }
+
         const nameInput = document.getElementById('personName');
         const ageInput = document.getElementById('personAge');
         const phoneInput = document.getElementById('personPhone');
@@ -118,6 +124,12 @@ class AttendanceManager {
         this.showNotification(name + ' został(a) dodany(a) do listy!', 'success');
     }
     toggleAttendance(id) {
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canEdit()) {
+            this.showNotification('Brak uprawnień do zaznaczania obecności!', 'error');
+            return;
+        }
+
         // Toggle obecności działa tylko gdy jest wybrana data
         if (this.selectedDate && this.currentDateAttendance) {
             const person = this.currentDateAttendance.find(p => p.id === id);
@@ -136,6 +148,12 @@ class AttendanceManager {
     }
 
     editPerson(id) {
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canEdit()) {
+            this.showNotification('Brak uprawnień do edycji osób!', 'error');
+            return;
+        }
+
         const person = this.people.find(p => p.id === id);
         if (!person) return;
 
@@ -378,6 +396,12 @@ class AttendanceManager {
     }
 
     deletePerson(id) {
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canDelete()) {
+            this.showNotification('Brak uprawnień do usuwania osób!', 'error');
+            return;
+        }
+
         const person = this.people.find(p => p.id === id);
         if (person && confirm('Czy na pewno chcesz usunac ' + person.name + ' z listy?')) {
             this.people = this.people.filter(p => p.id !== id);
@@ -391,6 +415,12 @@ class AttendanceManager {
     deleteAllPeople() {
         if (!this.selectedGroup) {
             this.showNotification('Wybierz grupę!', 'error');
+            return;
+        }
+
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canDelete()) {
+            this.showNotification('Brak uprawnień do usuwania danych!', 'error');
             return;
         }
 
@@ -431,6 +461,12 @@ class AttendanceManager {
             this.showNotification('Wybierz datę aby zaznaczyć obecność!', 'error');
             return;
         }
+
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canEdit()) {
+            this.showNotification('Brak uprawnień do zaznaczania obecności!', 'error');
+            return;
+        }
         
         if (this.currentDateAttendance.length === 0) {
             this.showNotification('Lista jest pusta!', 'error');
@@ -449,6 +485,12 @@ class AttendanceManager {
             this.showNotification('Wybierz datę aby zaznaczyć obecność!', 'error');
             return;
         }
+
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canEdit()) {
+            this.showNotification('Brak uprawnień do zaznaczania obecności!', 'error');
+            return;
+        }
         
         if (this.currentDateAttendance.length === 0) {
             this.showNotification('Lista jest pusta!', 'error');
@@ -465,23 +507,26 @@ class AttendanceManager {
         // Sprawdź czy filtry już istnieją
         let filtersContainer = document.querySelector('.filters');
         if (!filtersContainer) {
-            // Utwórz kontener filtrów
-            filtersContainer = document.createElement('div');
-            filtersContainer.className = 'filters';
-            filtersContainer.innerHTML = `
-                <button id="showAll" class="filter-btn active">Wszyscy</button>
-                <button id="showPresent" class="filter-btn">Obecni</button>
-                <button id="showAbsent" class="filter-btn">Nieobecni</button>
-            `;
-            
-            // Wstaw przed listą obecności
-            const attendanceList = document.getElementById('attendanceList');
-            attendanceList.parentNode.insertBefore(filtersContainer, attendanceList);
-            
-            // Dodaj obsługę kliknięć
-            filtersContainer.querySelector('#showAll').addEventListener('click', () => this.setFilter('all'));
-            filtersContainer.querySelector('#showPresent').addEventListener('click', () => this.setFilter('present'));
-            filtersContainer.querySelector('#showAbsent').addEventListener('click', () => this.setFilter('absent'));
+            // Sprawdź uprawnienia - filtry tylko dla adminów
+            if (window.loginManager && window.loginManager.canViewDetails()) {
+                // Utwórz kontener filtrów
+                filtersContainer = document.createElement('div');
+                filtersContainer.className = 'filters';
+                filtersContainer.innerHTML = `
+                    <button id="showAll" class="filter-btn active">Wszyscy</button>
+                    <button id="showPresent" class="filter-btn">Obecni</button>
+                    <button id="showAbsent" class="filter-btn">Nieobecni</button>
+                `;
+                
+                // Wstaw przed listą obecności
+                const attendanceList = document.getElementById('attendanceList');
+                attendanceList.parentNode.insertBefore(filtersContainer, attendanceList);
+                
+                // Dodaj obsługę kliknięć
+                filtersContainer.querySelector('#showAll').addEventListener('click', () => this.setFilter('all'));
+                filtersContainer.querySelector('#showPresent').addEventListener('click', () => this.setFilter('present'));
+                filtersContainer.querySelector('#showAbsent').addEventListener('click', () => this.setFilter('absent'));
+            }
         }
     }
 
@@ -512,6 +557,24 @@ class AttendanceManager {
     render() {
         const container = document.getElementById('attendanceList');
         
+        // Ukryj/pokaż formularz dodawania osób na podstawie uprawnień
+        const addPersonSection = document.querySelector('.add-person');
+        if (addPersonSection) {
+            addPersonSection.style.display = (window.loginManager && window.loginManager.canAdd()) ? 'block' : 'none';
+        }
+
+        // Ukryj/pokaż statystyki na podstawie uprawnień
+        const statsSection = document.querySelector('.stats');
+        if (statsSection) {
+            statsSection.style.display = (window.loginManager && window.loginManager.canViewDetails()) ? 'flex' : 'none';
+        }
+
+        // Ukryj/pokaż przyciski akcji na podstawie uprawnień
+        const actionsSection = document.querySelector('.actions');
+        if (actionsSection) {
+            actionsSection.style.display = (window.loginManager && window.loginManager.canEdit()) ? 'flex' : 'none';
+        }
+        
         // Użyj danych z wybranej daty jeśli jest wybrana, w przeciwnym razie użyj oryginalnej listy
         const peopleToRender = this.selectedDate && this.currentDateAttendance ? this.currentDateAttendance : this.people;
         
@@ -532,7 +595,8 @@ class AttendanceManager {
             // Dodaj filtry tylko gdy jest wybrana data
             this.renderFilters();
         container.innerHTML = filteredPeople.map(person => {
-            return '<div class="person-item clickable ' + (person.present ? 'present' : 'absent') + '" onclick="attendanceManager.toggleAttendance(' + person.id + ')" style="cursor: pointer;">' +
+            return '<div class="person-item ' + (window.loginManager && window.loginManager.canMarkAttendance() ? 'clickable ' : '') + (person.present ? 'present' : 'absent') + '" ' + 
+                (window.loginManager && window.loginManager.canMarkAttendance() ? 'onclick="attendanceManager.toggleAttendance(' + person.id + ')" style="cursor: pointer;"' : '') + '>' +
                 '<div class="person-info">' +
                     '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
                     (person.note && person.note !== '' ? '<div class="person-note">📝 ' + this.escapeHtml(person.note) + '</div>' : '') +
@@ -545,22 +609,18 @@ class AttendanceManager {
                     '</span>' +
                 '</div>' +
                 '<div class="person-actions" onclick="event.stopPropagation()">' +
+                    (window.loginManager && window.loginManager.canMarkAttendance() ? 
                     '<button class="toggle-btn ' + (person.present ? 'toggle-absent' : 'toggle-present') + '" ' +
                             'onclick="attendanceManager.toggleAttendance(' + person.id + ')">' +
                         (person.present ? 'Oznacz jako nieobecny' : 'Oznacz jako obecny') +
-                    '</button>' +
-                    '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">' +
-                        'Edytuj' +
-                    '</button>' +
-                    '<button class="note-btn" onclick="attendanceManager.showNoteModal(' + person.id + ')">' +
-                        'Notatka' +
-                    '</button>' +
-                    '<button class="times-btn" onclick="attendanceManager.showTimesModal(' + person.id + ')">' +
-                        'Czasy' +
-                    '</button>' +
-                    '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
-                        'Usun' +
-                    '</button>' +
+                        '</button>' : '') +
+                    (window.loginManager && window.loginManager.canEdit() ? 
+                        '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">Edytuj</button>' : '') +
+                    (window.loginManager && window.loginManager.canViewDetails() ? 
+                        '<button class="note-btn" onclick="attendanceManager.showNoteModal(' + person.id + ')">Notatka</button>' +
+                        '<button class="times-btn" onclick="attendanceManager.showTimesModal(' + person.id + ')">Czasy</button>' : '') +
+                    (window.loginManager && window.loginManager.canDelete() ? 
+                        '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">Usun</button>' : '') +
                 '</div>' +
             '</div>';
         }).join('');
@@ -581,27 +641,27 @@ class AttendanceManager {
                             (person.age && person.age !== null ? '<span class="person-age">👤 ' + person.age + ' lat</span>' : '') +
                             (person.phone && person.phone !== '' ? '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' : '') +
                         '</div>' +
-                        '<span class="info-text">Wybierz datę aby zaznaczyć obecność</span>' +
+                        '<span class="info-text">' + (window.loginManager && window.loginManager.canMarkAttendance() ? 'Wybierz datę aby zaznaczyć obecność' : 'Wybierz datę aby zobaczyć obecność') + '</span>' +
                     '</div>' +
                     '<div class="person-actions">' +
-                        '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">' +
-                            'Edytuj' +
-                        '</button>' +
-                        '<button class="note-btn" onclick="attendanceManager.showNoteModal(' + person.id + ')">' +
-                            'Notatka' +
-                        '</button>' +
-                        '<button class="times-btn" onclick="attendanceManager.showTimesModal(' + person.id + ')">' +
-                            'Czasy' +
-                        '</button>' +
-                        '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
-                            'Usun' +
-                        '</button>' +
+                        (window.loginManager && window.loginManager.canEdit() ? 
+                            '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">Edytuj</button>' : '') +
+                        (window.loginManager && window.loginManager.canViewDetails() ? 
+                            '<button class="note-btn" onclick="attendanceManager.showNoteModal(' + person.id + ')">Notatka</button>' +
+                            '<button class="times-btn" onclick="attendanceManager.showTimesModal(' + person.id + ')">Czasy</button>' : '') +
+                        (window.loginManager && window.loginManager.canDelete() ? 
+                            '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">Usun</button>' : '') +
                     '</div>' +
-                '</div>';
-            }).join('');
+            '</div>';
+        }).join('');
         }
     }
     updateStats() {
+        // Statystyki tylko dla adminów
+        if (!window.loginManager || !window.loginManager.canViewDetails()) {
+            return;
+        }
+
         if (this.selectedDate && this.currentDateAttendance) {
             // Jeśli jest wybrana data, pokaż statystyki dla tej daty
             const total = this.currentDateAttendance.length;
@@ -829,6 +889,23 @@ class AttendanceManager {
                 </div>
             `;
         }).join('');
+
+        // Ukryj/pokaż przyciski na podstawie uprawnień
+        const deleteAllBtn = document.getElementById('deleteAllBtn');
+        const addDateBtn = document.getElementById('addDateBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        if (deleteAllBtn) {
+            deleteAllBtn.style.display = (window.loginManager && window.loginManager.canDelete()) ? 'block' : 'none';
+        }
+        
+        if (addDateBtn) {
+            addDateBtn.style.display = (window.loginManager && window.loginManager.canAdd()) ? 'block' : 'none';
+        }
+
+        if (exportBtn) {
+            exportBtn.style.display = (window.loginManager && window.loginManager.canViewDetails()) ? 'block' : 'none';
+        }
     }
 
     selectGroup(groupName) {
@@ -1034,6 +1111,12 @@ class AttendanceManager {
     }
 
     addDate(dateString) {
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canAdd()) {
+            this.showNotification('Brak uprawnień do dodawania dat!', 'error');
+            return;
+        }
+
         if (this.dates.some(date => date.date === dateString)) {
             this.showNotification('Ta data już istnieje!', 'error');
             return;
@@ -1064,6 +1147,12 @@ class AttendanceManager {
     }
 
     deleteDate(id) {
+        // Sprawdź uprawnienia
+        if (!window.loginManager || !window.loginManager.canDelete()) {
+            this.showNotification('Brak uprawnień do usuwania dat!', 'error');
+            return;
+        }
+
         const date = this.dates.find(d => d.id === id);
         if (date && confirm('Czy na pewno chcesz usunąć tę datę?')) {
             this.dates = this.dates.filter(d => d.id !== id);
@@ -1214,9 +1303,8 @@ class AttendanceManager {
                     <div class="date-info">
                         <span class="date-text">${this.escapeHtml(date.displayDate)}</span>
                         <div class="date-actions">
-                            <button class="date-delete-btn" onclick="event.stopPropagation(); attendanceManager.deleteDate(${date.id})" title="Usuń datę">
-                                ×
-                            </button>
+                            ${window.loginManager && window.loginManager.canDelete() ? 
+                                `<button class="date-delete-btn" onclick="event.stopPropagation(); attendanceManager.deleteDate(${date.id})" title="Usuń datę">×</button>` : ''}
                         </div>
                     </div>
                 </div>
@@ -1280,18 +1368,30 @@ class AttendanceManager {
 // System logowania
 class LoginManager {
     constructor() {
-        this.correctUsername = 'planprzygoda';
-        this.correctPassword = 'przygod2025';
+        this.users = {
+            'planprzygoda': {
+                password: 'przygod2025',
+                role: 'admin' // Pełny dostęp
+            },
+            'rodzice': {
+                password: 'rodzice',
+                role: 'readonly' // Tylko odczyt
+            }
+        };
         this.init();
     }
 
     init() {
+        console.log('Inicjalizacja LoginManager');
+        
         // Sprawdź czy użytkownik jest już zalogowany
         if (this.isLoggedIn()) {
+            console.log('Użytkownik już zalogowany, pokazuję główną aplikację');
             this.showMainApp();
             return;
         }
 
+        console.log('Użytkownik nie zalogowany, pokazuję stronę logowania');
         // Pokaż stronę logowania
         this.showLoginPage();
         this.bindLoginEvents();
@@ -1309,20 +1409,27 @@ class LoginManager {
         const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('loginError');
 
-        if (username === this.correctUsername && password === this.correctPassword) {
+        console.log('Próba logowania:', { username, password });
+        console.log('Dostępni użytkownicy:', this.users);
+
+        if (this.users[username] && this.users[username].password === password) {
+            console.log('Logowanie udane dla:', username);
             // Zaloguj użytkownika
-            this.login();
+            this.login(username, this.users[username].role);
             this.showMainApp();
         } else {
+            console.log('Logowanie nieudane');
             // Pokaż błąd
             errorDiv.style.display = 'block';
             errorDiv.textContent = 'Nieprawidłowy login lub hasło!';
         }
     }
 
-    login() {
+    login(username, role) {
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('loginTime', Date.now().toString());
+        localStorage.setItem('currentUser', username);
+        localStorage.setItem('userRole', role);
     }
 
     isLoggedIn() {
@@ -1330,10 +1437,13 @@ class LoginManager {
         const loginTime = parseInt(localStorage.getItem('loginTime') || '0');
         const now = Date.now();
         
+        console.log('Sprawdzanie logowania:', { isLoggedIn, loginTime, now });
+        
         // Sesja wygasa po 24 godzinach
         const sessionExpired = (now - loginTime) > (24 * 60 * 60 * 1000);
         
         if (sessionExpired) {
+            console.log('Sesja wygasła, wylogowuję');
             this.logout();
             return false;
         }
@@ -1344,6 +1454,8 @@ class LoginManager {
     logout() {
         localStorage.removeItem('isLoggedIn');
         localStorage.removeItem('loginTime');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('userRole');
         this.showLoginPage();
     }
 
@@ -1367,6 +1479,46 @@ class LoginManager {
             logoutBtn.addEventListener('click', () => this.logout());
         }
     }
+
+    // Sprawdź czy użytkownik ma uprawnienia do edycji
+    canEdit() {
+        const role = localStorage.getItem('userRole');
+        return role === 'admin';
+    }
+
+    // Sprawdź czy użytkownik ma uprawnienia do dodawania
+    canAdd() {
+        const role = localStorage.getItem('userRole');
+        return role === 'admin';
+    }
+
+    // Sprawdź czy użytkownik ma uprawnienia do usuwania
+    canDelete() {
+        const role = localStorage.getItem('userRole');
+        return role === 'admin';
+    }
+
+    // Sprawdź czy użytkownik może zaznaczać obecność
+    canMarkAttendance() {
+        const role = localStorage.getItem('userRole');
+        return role === 'admin';
+    }
+
+    // Sprawdź czy użytkownik może przeglądać notatki i czasy
+    canViewDetails() {
+        const role = localStorage.getItem('userRole');
+        return role === 'admin';
+    }
+}
+
+// Funkcja do czyszczenia danych logowania (dostępna globalnie)
+function clearLoginData() {
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('loginTime');
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('userRole');
+    console.log('Dane logowania wyczyszczone');
+    location.reload(); // Odśwież stronę
 }
 
 // Inicjalizacja aplikacji
