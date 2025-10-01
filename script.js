@@ -1382,16 +1382,12 @@ class LoginManager {
     }
 
     init() {
-        console.log('Inicjalizacja LoginManager');
-        
         // Sprawdź czy użytkownik jest już zalogowany
         if (this.isLoggedIn()) {
-            console.log('Użytkownik już zalogowany, pokazuję główną aplikację');
             this.showMainApp();
             return;
         }
 
-        console.log('Użytkownik nie zalogowany, pokazuję stronę logowania');
         // Pokaż stronę logowania
         this.showLoginPage();
         this.bindLoginEvents();
@@ -1409,16 +1405,11 @@ class LoginManager {
         const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('loginError');
 
-        console.log('Próba logowania:', { username, password });
-        console.log('Dostępni użytkownicy:', this.users);
-
         if (this.users[username] && this.users[username].password === password) {
-            console.log('Logowanie udane dla:', username);
             // Zaloguj użytkownika
             this.login(username, this.users[username].role);
             this.showMainApp();
         } else {
-            console.log('Logowanie nieudane');
             // Pokaż błąd
             errorDiv.style.display = 'block';
             errorDiv.textContent = 'Nieprawidłowy login lub hasło!';
@@ -1437,13 +1428,10 @@ class LoginManager {
         const loginTime = parseInt(localStorage.getItem('loginTime') || '0');
         const now = Date.now();
         
-        console.log('Sprawdzanie logowania:', { isLoggedIn, loginTime, now });
-        
         // Sesja wygasa po 24 godzinach
         const sessionExpired = (now - loginTime) > (24 * 60 * 60 * 1000);
         
         if (sessionExpired) {
-            console.log('Sesja wygasła, wylogowuję');
             this.logout();
             return false;
         }
@@ -1509,16 +1497,6 @@ class LoginManager {
         const role = localStorage.getItem('userRole');
         return role === 'admin';
     }
-}
-
-// Funkcja do czyszczenia danych logowania (dostępna globalnie)
-function clearLoginData() {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('loginTime');
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('userRole');
-    console.log('Dane logowania wyczyszczone');
-    location.reload(); // Odśwież stronę
 }
 
 // Inicjalizacja aplikacji
