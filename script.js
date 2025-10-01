@@ -532,7 +532,7 @@ class AttendanceManager {
             // Dodaj filtry tylko gdy jest wybrana data
             this.renderFilters();
         container.innerHTML = filteredPeople.map(person => {
-            return '<div class="person-item ' + (person.present ? 'present' : 'absent') + '">' +
+            return '<div class="person-item clickable ' + (person.present ? 'present' : 'absent') + '" onclick="attendanceManager.toggleAttendance(' + person.id + ')" style="cursor: pointer;">' +
                 '<div class="person-info">' +
                     '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
                     (person.note && person.note !== '' ? '<div class="person-note">📝 ' + this.escapeHtml(person.note) + '</div>' : '') +
@@ -544,7 +544,7 @@ class AttendanceManager {
                         (person.present ? 'Obecny' : 'Nieobecny') +
                     '</span>' +
                 '</div>' +
-                '<div class="person-actions">' +
+                '<div class="person-actions" onclick="event.stopPropagation()">' +
                     '<button class="toggle-btn ' + (person.present ? 'toggle-absent' : 'toggle-present') + '" ' +
                             'onclick="attendanceManager.toggleAttendance(' + person.id + ')">' +
                         (person.present ? 'Oznacz jako nieobecny' : 'Oznacz jako obecny') +
