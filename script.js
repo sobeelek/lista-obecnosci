@@ -92,14 +92,14 @@ class AttendanceManager {
         // Toggle obecności działa tylko gdy jest wybrana data
         if (this.selectedDate && this.currentDateAttendance) {
             const person = this.currentDateAttendance.find(p => p.id === id);
-            if (person) {
-                person.present = !person.present;
+        if (person) {
+            person.present = !person.present;
                 this.saveAttendanceForCurrentDate();
-                this.render();
-                this.updateStats();
-                
-                const status = person.present ? 'obecny(a)' : 'nieobecny(a)';
-                this.showNotification(person.name + ' oznaczony(a) jako ' + status, 'info');
+            this.render();
+            this.updateStats();
+            
+            const status = person.present ? 'obecny(a)' : 'nieobecny(a)';
+            this.showNotification(person.name + ' oznaczony(a) jako ' + status, 'info');
             }
         } else {
             this.showNotification('Wybierz datę aby zaznaczyć obecność!', 'error');
@@ -220,25 +220,25 @@ class AttendanceManager {
 
         // Jeśli jest wybrana data, pokaż pełny interfejs z zaznaczaniem obecności
         if (this.selectedDate && this.currentDateAttendance) {
-            container.innerHTML = filteredPeople.map(person => {
-                return '<div class="person-item ' + (person.present ? 'present' : 'absent') + '">' +
-                    '<div class="person-info">' +
-                        '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
-                        '<span class="status-badge ' + (person.present ? 'present' : 'absent') + '">' +
-                            (person.present ? 'Obecny' : 'Nieobecny') +
-                        '</span>' +
-                    '</div>' +
-                    '<div class="person-actions">' +
-                        '<button class="toggle-btn ' + (person.present ? 'toggle-absent' : 'toggle-present') + '" ' +
-                                'onclick="attendanceManager.toggleAttendance(' + person.id + ')">' +
-                            (person.present ? 'Oznacz jako nieobecny' : 'Oznacz jako obecny') +
-                        '</button>' +
-                        '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
-                            'Usun' +
-                        '</button>' +
-                    '</div>' +
-                '</div>';
-            }).join('');
+        container.innerHTML = filteredPeople.map(person => {
+            return '<div class="person-item ' + (person.present ? 'present' : 'absent') + '">' +
+                '<div class="person-info">' +
+                    '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
+                    '<span class="status-badge ' + (person.present ? 'present' : 'absent') + '">' +
+                        (person.present ? 'Obecny' : 'Nieobecny') +
+                    '</span>' +
+                '</div>' +
+                '<div class="person-actions">' +
+                    '<button class="toggle-btn ' + (person.present ? 'toggle-absent' : 'toggle-present') + '" ' +
+                            'onclick="attendanceManager.toggleAttendance(' + person.id + ')">' +
+                        (person.present ? 'Oznacz jako nieobecny' : 'Oznacz jako obecny') +
+                    '</button>' +
+                    '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
+                        'Usun' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
         } else {
             // Jeśli nie ma wybranej daty, pokaż tylko listę osób bez możliwości zaznaczania obecności
             container.innerHTML = filteredPeople.map(person => {
@@ -261,11 +261,11 @@ class AttendanceManager {
             // Jeśli jest wybrana data, pokaż statystyki dla tej daty
             const total = this.currentDateAttendance.length;
             const present = this.currentDateAttendance.filter(p => p.present).length;
-            const absent = total - present;
+        const absent = total - present;
 
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('presentCount').textContent = present;
-            document.getElementById('absentCount').textContent = absent;
+        document.getElementById('totalCount').textContent = total;
+        document.getElementById('presentCount').textContent = present;
+        document.getElementById('absentCount').textContent = absent;
         } else {
             // Jeśli nie ma wybranej daty, pokaż tylko liczbę osób w grupie
             const total = this.people.length;
@@ -352,24 +352,29 @@ class AttendanceManager {
                     attendanceData: this.attendanceData
                 });
                 
-                const { data, error } = await supabase
+                // Zawsze usuń stary rekord i dodaj nowy
+                await supabase
                     .from('groups')
-                    .upsert({
+                    .delete()
+                    .eq('group_name', this.selectedGroup);
+                
+                // Dodaj nowy rekord
+                const result = await supabase
+                    .from('groups')
+                    .insert({
                         group_name: this.selectedGroup,
                         people: this.people,
                         dates: this.dates,
                         attendance_data: this.attendanceData,
                         updated_at: new Date().toISOString()
-                    }, {
-                        onConflict: 'group_name'
                     });
                 
-                if (error) {
-                    console.error('Błąd Supabase:', error);
-                    throw error;
+                if (result.error) {
+                    console.error('Błąd Supabase:', result.error);
+                    throw result.error;
                 }
                 
-                console.log('Sukces! Zapisano do Supabase:', data);
+                console.log('Sukces! Zapisano do Supabase:', result.data);
                 this.showNotification('Dane zapisane do bazy!', 'success');
             } catch (error) {
                 console.error('Błąd zapisywania do Supabase:', error);
@@ -773,10 +778,102 @@ class AttendanceManager {
         }, 3000);
     }
 }
+// System logowania
+class LoginManager {
+    constructor() {
+        this.correctUsername = 'planprzygoda';
+        this.correctPassword = 'przygod2025';
+        this.init();
+    }
+
+    init() {
+        // Sprawdź czy użytkownik jest już zalogowany
+        if (this.isLoggedIn()) {
+            this.showMainApp();
+            return;
+        }
+
+        // Pokaż stronę logowania
+        this.showLoginPage();
+        this.bindLoginEvents();
+    }
+
+    bindLoginEvents() {
+        const loginForm = document.getElementById('loginForm');
+        loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+    }
+
+    handleLogin(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+
+        if (username === this.correctUsername && password === this.correctPassword) {
+            // Zaloguj użytkownika
+            this.login();
+            this.showMainApp();
+        } else {
+            // Pokaż błąd
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Nieprawidłowy login lub hasło!';
+        }
+    }
+
+    login() {
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('loginTime', Date.now().toString());
+    }
+
+    isLoggedIn() {
+        const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+        const loginTime = parseInt(localStorage.getItem('loginTime') || '0');
+        const now = Date.now();
+        
+        // Sesja wygasa po 24 godzinach
+        const sessionExpired = (now - loginTime) > (24 * 60 * 60 * 1000);
+        
+        if (sessionExpired) {
+            this.logout();
+            return false;
+        }
+        
+        return isLoggedIn;
+    }
+
+    logout() {
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('loginTime');
+        this.showLoginPage();
+    }
+
+    showLoginPage() {
+        document.getElementById('loginPage').style.display = 'flex';
+        document.getElementById('mainApp').style.display = 'none';
+    }
+
+    showMainApp() {
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+        
+        // Inicjalizuj główną aplikację
+        if (typeof AttendanceManager !== 'undefined') {
+            window.attendanceManager = new AttendanceManager();
+        }
+        
+        // Dodaj obsługę przycisku wylogowania
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.logout());
+        }
+    }
+}
+
 // Inicjalizacja aplikacji
-let attendanceManager;
+let loginManager;
 document.addEventListener('DOMContentLoaded', () => {
-    attendanceManager = new AttendanceManager();
+    loginManager = new LoginManager();
 });
 
 // Dodatkowe funkcje pomocnicze
