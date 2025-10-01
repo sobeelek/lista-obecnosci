@@ -19,14 +19,16 @@ class AttendanceManager {
         this.people = [];
         this.dates = [];
         this.attendanceData = {}; // Dane obecności dla każdej daty w aktualnej grupie
-        this.groupData = JSON.parse(localStorage.getItem('groupData')) || {}; // Dane dla każdej grupy
+        this.groupData = {}; // Dane dla każdej grupy - będą ładowane z Supabase
         this.currentFilter = 'all';
         this.selectedDate = null;
         this.init();
     }
 
-    init() {
+    async init() {
         this.bindEvents();
+        await this.loadFromSupabase();
+        this.setupPolling(); // Używamy polling zamiast Realtime
         this.renderGroups();
         this.render();
         this.renderDates();
@@ -339,8 +341,109 @@ class AttendanceManager {
         }
     }
 
+    // Metody Supabase
+    async saveToSupabase() {
+        if (this.selectedGroup) {
+            try {
+                const { error } = await supabase
+                    .from('groups')
+                    .upsert({
+                        group_name: this.selectedGroup,
+                        people: this.people,
+                        dates: this.dates,
+                        attendance_data: this.attendanceData,
+                        updated_at: new Date().toISOString()
+                    });
+                
+                if (error) throw error;
+                console.log('Zapisano do Supabase:', this.selectedGroup);
+            } catch (error) {
+                console.error('Błąd zapisywania do Supabase:', error);
+                this.showNotification('Błąd zapisywania danych!', 'error');
+            }
+        }
+    }
+
+    async loadFromSupabase() {
+        try {
+            const { data, error } = await supabase
+                .from('groups')
+                .select('*');
+            
+            if (error) throw error;
+            
+            // Konwertuj dane z Supabase do formatu groupData
+            this.groupData = {};
+            if (data) {
+                data.forEach(row => {
+                    this.groupData[row.group_name] = {
+                        people: row.people || [],
+                        dates: row.dates || [],
+                        attendanceData: row.attendance_data || {}
+                    };
+                });
+            }
+            
+            console.log('Załadowano z Supabase:', this.groupData);
+        } catch (error) {
+            console.error('Błąd ładowania z Supabase:', error);
+            this.showNotification('Błąd ładowania danych!', 'error');
+        }
+    }
+
+    setupPolling() {
+        // Odświeżaj dane co 3 sekundy
+        setInterval(async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('groups')
+                    .select('*')
+                    .order('updated_at', { ascending: false });
+                
+                if (error) throw error;
+                
+                if (data) {
+                    let hasChanges = false;
+                    const newGroupData = {};
+                    
+                    data.forEach(row => {
+                        const groupName = row.group_name;
+                        const newData = {
+                            people: row.people || [],
+                            dates: row.dates || [],
+                            attendanceData: row.attendance_data || {}
+                        };
+                        
+                        // Sprawdź czy dane się zmieniły
+                        if (JSON.stringify(this.groupData[groupName]) !== JSON.stringify(newData)) {
+                            hasChanges = true;
+                        }
+                        
+                        newGroupData[groupName] = newData;
+                    });
+                    
+                    if (hasChanges) {
+                        this.groupData = newGroupData;
+                        
+                        // Jeśli aktualna grupa się zmieniła, odśwież widok
+                        if (this.selectedGroup) {
+                            this.loadGroupData(this.selectedGroup);
+                        }
+                        
+                        console.log('Dane zostały zaktualizowane przez polling');
+                    }
+                }
+            } catch (error) {
+                console.error('Błąd polling:', error);
+            }
+        }, 3000); // Co 3 sekundy
+    }
+
     saveToStorage() {
+        // Zachowaj localStorage jako backup
         localStorage.setItem('groupData', JSON.stringify(this.groupData));
+        // Głównie używaj Supabase
+        this.saveToSupabase();
     }
 
     // Metody grup
