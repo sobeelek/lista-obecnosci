@@ -21,6 +21,7 @@ class AttendanceManager {
         this.attendanceData = {}; // Dane obecności dla każdej daty w aktualnej grupie
         this.groupData = {}; // Dane dla każdej grupy - będą ładowane z Supabase
         this.currentFilter = 'all';
+        this.lastClickTime = 0; // Zabezpieczenie przed szybkimi kliknięciami
         this.selectedDate = null;
         this.init();
     }
@@ -47,9 +48,6 @@ class AttendanceManager {
         document.getElementById('personPhone').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addPerson();
         });
-        document.getElementById('showAll').addEventListener('click', () => this.setFilter('all'));
-        document.getElementById('showPresent').addEventListener('click', () => this.setFilter('present'));
-        document.getElementById('showAbsent').addEventListener('click', () => this.setFilter('absent'));
         document.getElementById('markAllPresent').addEventListener('click', () => this.markAllPresent());
         document.getElementById('markAllAbsent').addEventListener('click', () => this.markAllAbsent());
         document.getElementById('deleteAllPeople').addEventListener('click', () => this.deleteAllPeople());
@@ -99,6 +97,8 @@ class AttendanceManager {
             name: name,
             age: age,
             phone: phone || '',
+            note: '',
+            swimmingTimes: {},
             present: false,
             addedAt: new Date().toISOString()
         };
@@ -129,7 +129,7 @@ class AttendanceManager {
             
             const status = person.present ? 'obecny(a)' : 'nieobecny(a)';
             this.showNotification(person.name + ' oznaczony(a) jako ' + status, 'info');
-            }
+        }
         } else {
             this.showNotification('Wybierz datę aby zaznaczyć obecność!', 'error');
         }
@@ -231,6 +231,152 @@ class AttendanceManager {
         }
     }
 
+    showNoteModal(id) {
+        const person = this.people.find(p => p.id === id);
+        if (!person) return;
+
+        // Utwórz modal notatki
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Notatka - ${this.escapeHtml(person.name)}</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="noteText">Notatka:</label>
+                        <textarea id="noteText" rows="6" placeholder="Wprowadź notatkę..." maxlength="1000">${this.escapeHtml(person.note || '')}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+                    <button class="btn btn-primary" onclick="attendanceManager.saveNote(${person.id})">Zapisz</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Fokus na textarea
+        setTimeout(() => {
+            document.getElementById('noteText').focus();
+        }, 100);
+    }
+
+    saveNote(id) {
+        const noteInput = document.getElementById('noteText');
+        const note = noteInput.value.trim();
+
+        const person = this.people.find(p => p.id === id);
+        if (person) {
+            person.note = note;
+            
+            this.saveGroupData();
+            this.render();
+            
+            // Zamknij modal
+            document.querySelector('.modal-overlay').remove();
+            
+            this.showNotification('Notatka została zapisana!', 'success');
+        }
+    }
+
+    showTimesModal(id) {
+        const person = this.people.find(p => p.id === id);
+        if (!person) return;
+
+        // Utwórz modal czasów pływania
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content times-modal">
+                <div class="modal-header">
+                    <h3>Czasy pływania - ${this.escapeHtml(person.name)}</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="swimming-styles">
+                        <h4>Style pływania:</h4>
+                        <div class="style-buttons">
+                            <button class="style-btn active" data-style="dowolny">Dowolny</button>
+                            <button class="style-btn" data-style="grzbietowy">Grzbietowy</button>
+                            <button class="style-btn" data-style="klasyczny">Klasyczny</button>
+                        </div>
+                    </div>
+                    <div class="times-section">
+                        <h4>Czasy na dystansach:</h4>
+                        <div class="times-grid" id="timesGrid">
+                            ${this.generateTimesGrid(person.swimmingTimes || {})}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+                    <button class="btn btn-primary" onclick="attendanceManager.saveTimes(${person.id})">Zapisz</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Obsługa przycisków stylów
+        modal.querySelectorAll('.style-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                modal.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                attendanceManager.updateTimesGrid(btn.dataset.style);
+            });
+        });
+    }
+
+    generateTimesGrid(swimmingTimes) {
+        const distances = [];
+        for (let i = 25; i <= 500; i += 25) {
+            distances.push(i);
+        }
+
+        return distances.map(distance => `
+            <div class="time-row">
+                <label class="distance-label">${distance}m:</label>
+                <input type="text" class="time-input" data-distance="${distance}" 
+                       placeholder="mm:ss.ms" value="${swimmingTimes[distance] || ''}">
+            </div>
+        `).join('');
+    }
+
+    updateTimesGrid(style) {
+        // Ta funkcja może być rozszerzona w przyszłości
+        // Na razie wszystkie style używają tej samej siatki
+    }
+
+    saveTimes(id) {
+        const person = this.people.find(p => p.id === id);
+        if (!person) return;
+
+        const times = {};
+        const timeInputs = document.querySelectorAll('.time-input');
+        
+        timeInputs.forEach(input => {
+            const distance = input.dataset.distance;
+            const time = input.value.trim();
+            if (time) {
+                times[distance] = time;
+            }
+        });
+
+        person.swimmingTimes = times;
+        
+        this.saveGroupData();
+        this.render();
+        
+        // Zamknij modal
+        document.querySelector('.modal-overlay').remove();
+        
+        this.showNotification('Czasy pływania zostały zapisane!', 'success');
+    }
+
     deletePerson(id) {
         const person = this.people.find(p => p.id === id);
         if (person && confirm('Czy na pewno chcesz usunac ' + person.name + ' z listy?')) {
@@ -315,6 +461,30 @@ class AttendanceManager {
         this.updateStats();
         this.showNotification('Wszyscy oznaczono jako nieobecni!', 'success');
     }
+    renderFilters() {
+        // Sprawdź czy filtry już istnieją
+        let filtersContainer = document.querySelector('.filters');
+        if (!filtersContainer) {
+            // Utwórz kontener filtrów
+            filtersContainer = document.createElement('div');
+            filtersContainer.className = 'filters';
+            filtersContainer.innerHTML = `
+                <button id="showAll" class="filter-btn active">Wszyscy</button>
+                <button id="showPresent" class="filter-btn">Obecni</button>
+                <button id="showAbsent" class="filter-btn">Nieobecni</button>
+            `;
+            
+            // Wstaw przed listą obecności
+            const attendanceList = document.getElementById('attendanceList');
+            attendanceList.parentNode.insertBefore(filtersContainer, attendanceList);
+            
+            // Dodaj obsługę kliknięć
+            filtersContainer.querySelector('#showAll').addEventListener('click', () => this.setFilter('all'));
+            filtersContainer.querySelector('#showPresent').addEventListener('click', () => this.setFilter('present'));
+            filtersContainer.querySelector('#showAbsent').addEventListener('click', () => this.setFilter('absent'));
+        }
+    }
+
     getFilteredPeople(peopleList = null) {
         const people = peopleList || this.people;
         let filtered;
@@ -344,7 +514,9 @@ class AttendanceManager {
         
         // Użyj danych z wybranej daty jeśli jest wybrana, w przeciwnym razie użyj oryginalnej listy
         const peopleToRender = this.selectedDate && this.currentDateAttendance ? this.currentDateAttendance : this.people;
-        const filteredPeople = this.getFilteredPeople(peopleToRender);
+        
+        // Filtry tylko gdy jest wybrana data
+        const filteredPeople = this.selectedDate && this.currentDateAttendance ? this.getFilteredPeople(peopleToRender) : peopleToRender;
 
         if (filteredPeople.length === 0) {
             const emptyMessage = peopleToRender.length === 0 
@@ -357,10 +529,13 @@ class AttendanceManager {
 
         // Jeśli jest wybrana data, pokaż pełny interfejs z zaznaczaniem obecności
         if (this.selectedDate && this.currentDateAttendance) {
+            // Dodaj filtry tylko gdy jest wybrana data
+            this.renderFilters();
         container.innerHTML = filteredPeople.map(person => {
             return '<div class="person-item ' + (person.present ? 'present' : 'absent') + '">' +
                 '<div class="person-info">' +
                     '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
+                    (person.note && person.note !== '' ? '<div class="person-note">📝 ' + this.escapeHtml(person.note) + '</div>' : '') +
                     '<div class="person-details">' +
                         (person.age && person.age !== null ? '<span class="person-age">👤 ' + person.age + ' lat</span>' : '') +
                         (person.phone && person.phone !== '' ? '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' : '') +
@@ -377,6 +552,12 @@ class AttendanceManager {
                     '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">' +
                         'Edytuj' +
                     '</button>' +
+                    '<button class="note-btn" onclick="attendanceManager.showNoteModal(' + person.id + ')">' +
+                        'Notatka' +
+                    '</button>' +
+                    '<button class="times-btn" onclick="attendanceManager.showTimesModal(' + person.id + ')">' +
+                        'Czasy' +
+                    '</button>' +
                     '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
                         'Usun' +
                     '</button>' +
@@ -384,11 +565,18 @@ class AttendanceManager {
             '</div>';
         }).join('');
         } else {
+            // Usuń filtry gdy nie ma wybranej daty
+            const filtersContainer = document.querySelector('.filters');
+            if (filtersContainer) {
+                filtersContainer.remove();
+            }
+            
             // Jeśli nie ma wybranej daty, pokaż tylko listę osób bez możliwości zaznaczania obecności
             container.innerHTML = filteredPeople.map(person => {
                 return '<div class="person-item general-list">' +
                     '<div class="person-info">' +
                         '<span class="person-name">' + this.escapeHtml(person.name) + '</span>' +
+                        (person.note && person.note !== '' ? '<div class="person-note">📝 ' + this.escapeHtml(person.note) + '</div>' : '') +
                         '<div class="person-details">' +
                             (person.age && person.age !== null ? '<span class="person-age">👤 ' + person.age + ' lat</span>' : '') +
                             (person.phone && person.phone !== '' ? '<span class="person-phone">📞 ' + this.escapeHtml(person.phone) + '</span>' : '') +
@@ -398,6 +586,12 @@ class AttendanceManager {
                     '<div class="person-actions">' +
                         '<button class="edit-btn" onclick="attendanceManager.editPerson(' + person.id + ')">' +
                             'Edytuj' +
+                        '</button>' +
+                        '<button class="note-btn" onclick="attendanceManager.showNoteModal(' + person.id + ')">' +
+                            'Notatka' +
+                        '</button>' +
+                        '<button class="times-btn" onclick="attendanceManager.showTimesModal(' + person.id + ')">' +
+                            'Czasy' +
                         '</button>' +
                         '<button class="delete-btn" onclick="attendanceManager.deletePerson(' + person.id + ')">' +
                             'Usun' +
@@ -458,14 +652,18 @@ class AttendanceManager {
         }
         
         let csvContent = 'Lista Obecnosci - ' + exportDate + ' ' + time + '\n\n';
-        csvContent += 'Imie,Wiek,Telefon,Status,Data dodania\n';
+        csvContent += 'Imie,Wiek,Telefon,Status,Notatka,Czasy pływania,Data dodania\n';
         
         peopleToExport.forEach(person => {
             const status = person.present ? 'Obecny' : 'Nieobecny';
             const addedDate = new Date(person.addedAt).toLocaleDateString('pl-PL');
             const age = (person.age && person.age !== null) ? person.age : 'Brak danych';
             const phone = (person.phone && person.phone !== '') ? person.phone : 'Brak danych';
-            csvContent += '"' + person.name + '","' + age + '","' + phone + '","' + status + '","' + addedDate + '"\n';
+            const note = person.note || 'Brak notatki';
+            const swimmingTimes = person.swimmingTimes ? Object.entries(person.swimmingTimes)
+                .map(([distance, time]) => `${distance}m: ${time}`)
+                .join('; ') : 'Brak czasów';
+            csvContent += '"' + person.name + '","' + age + '","' + phone + '","' + status + '","' + note + '","' + swimmingTimes + '","' + addedDate + '"\n';
         });
 
         const present = peopleToExport.filter(p => p.present).length;
@@ -689,12 +887,142 @@ class AttendanceManager {
             return;
         }
 
-        const date = prompt('Wprowadź datę (format: YYYY-MM-DD):');
-        if (date && this.isValidDate(date)) {
-            this.addDate(date);
-        } else if (date) {
-            this.showNotification('Nieprawidłowy format daty! Użyj YYYY-MM-DD', 'error');
+        // Utwórz modal z kalendarzem
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content calendar-modal">
+                <div class="modal-header">
+                    <h3>Wybierz datę</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="calendar-container">
+                        <div class="calendar-header">
+                            <button class="calendar-nav" onclick="attendanceManager.changeMonth(-1)">‹</button>
+                            <h4 id="calendarMonthYear"></h4>
+                            <button class="calendar-nav" onclick="attendanceManager.changeMonth(1)">›</button>
+                        </div>
+                        <div class="calendar-grid" id="calendarGrid">
+                            <!-- Kalendarz będzie generowany przez JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Inicjalizuj kalendarz
+        this.currentCalendarDate = new Date();
+        this.renderCalendar();
+    }
+
+    changeMonth(direction) {
+        this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() + direction);
+        this.renderCalendar();
+    }
+
+    renderCalendar() {
+        const monthYear = document.getElementById('calendarMonthYear');
+        const grid = document.getElementById('calendarGrid');
+        
+        if (!monthYear || !grid) return;
+
+        const year = this.currentCalendarDate.getFullYear();
+        const month = this.currentCalendarDate.getMonth();
+        
+        // Nazwa miesiąca i rok
+        const monthNames = [
+            'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+            'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'
+        ];
+        monthYear.textContent = `${monthNames[month]} ${year}`;
+
+        // Pierwszy dzień miesiąca i liczba dni
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+
+        // Nagłówki dni tygodnia
+        const dayNames = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+        let calendarHTML = '<div class="calendar-weekdays">';
+        dayNames.forEach(day => {
+            calendarHTML += `<div class="calendar-weekday">${day}</div>`;
+        });
+        calendarHTML += '</div>';
+
+        // Dni miesiąca
+        calendarHTML += '<div class="calendar-days">';
+        
+        // Puste komórki na początku miesiąca
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            calendarHTML += '<div class="calendar-day empty"></div>';
         }
+
+        // Dni miesiąca
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const isToday = this.isToday(year, month, day);
+            const isPast = this.isPastDate(year, month, day);
+            const isAlreadyAdded = this.dates.some(d => d.date === dateString);
+            
+            let dayClass = 'calendar-day';
+            if (isToday) dayClass += ' today';
+            if (isPast) dayClass += ' past';
+            if (isAlreadyAdded) dayClass += ' added';
+            
+            calendarHTML += `
+                <div class="${dayClass}" onclick="attendanceManager.selectCalendarDate('${dateString}')">
+                    ${day}
+                    ${isAlreadyAdded ? '<span class="added-indicator">✓</span>' : ''}
+                </div>
+            `;
+        }
+        
+        calendarHTML += '</div>';
+        grid.innerHTML = calendarHTML;
+    }
+
+    isToday(year, month, day) {
+        const today = new Date();
+        return today.getFullYear() === year && 
+               today.getMonth() === month && 
+               today.getDate() === day;
+    }
+
+    isPastDate(year, month, day) {
+        const today = new Date();
+        const date = new Date(year, month, day);
+        return date < today;
+    }
+
+    selectCalendarDate(dateString) {
+        // Sprawdź czy data już istnieje
+        if (this.dates.some(d => d.date === dateString)) {
+            this.showNotification('Ta data już istnieje!', 'error');
+            return;
+        }
+
+        // Sprawdź czy to nie przeszła data
+        const selectedDate = new Date(dateString);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (selectedDate < today) {
+            this.showNotification('Nie można dodać przeszłej daty!', 'error');
+            return;
+        }
+
+        // Dodaj datę
+        this.addDate(dateString);
+        
+        // Zamknij modal
+        document.querySelector('.modal-overlay').remove();
     }
 
     isValidDate(dateString) {
@@ -749,6 +1077,18 @@ class AttendanceManager {
     }
 
     selectDate(id) {
+        // Zabezpieczenie przed podwójnym kliknięciem
+        if (this.selectedDate === id) {
+            return; // Jeśli data jest już wybrana, nie rób nic
+        }
+        
+        // Zabezpieczenie przed szybkimi kliknięciami (debounce)
+        const now = Date.now();
+        if (now - this.lastClickTime < 300) { // 300ms debounce
+            return;
+        }
+        this.lastClickTime = now;
+        
         this.selectedDate = id;
         this.renderDates();
         this.loadAttendanceForDate(id);
@@ -870,11 +1210,11 @@ class AttendanceManager {
         container.innerHTML = this.dates.map(date => {
             const isSelected = this.selectedDate === date.id;
             return `
-                <div class="date-item ${isSelected ? 'selected' : ''}" onclick="attendanceManager.selectDate(${date.id})">
+                <div class="date-item ${isSelected ? 'selected' : ''}" onclick="attendanceManager.selectDate(${date.id})" style="cursor: pointer;">
                     <div class="date-info">
                         <span class="date-text">${this.escapeHtml(date.displayDate)}</span>
                         <div class="date-actions">
-                            <button class="date-delete-btn" onclick="event.stopPropagation(); attendanceManager.deleteDate(${date.id})">
+                            <button class="date-delete-btn" onclick="event.stopPropagation(); attendanceManager.deleteDate(${date.id})" title="Usuń datę">
                                 ×
                             </button>
                         </div>
