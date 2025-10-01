@@ -345,7 +345,14 @@ class AttendanceManager {
     async saveToSupabase() {
         if (this.selectedGroup) {
             try {
-                const { error } = await supabase
+                console.log('Próba zapisania do Supabase:', {
+                    group: this.selectedGroup,
+                    people: this.people,
+                    dates: this.dates,
+                    attendanceData: this.attendanceData
+                });
+                
+                const { data, error } = await supabase
                     .from('groups')
                     .upsert({
                         group_name: this.selectedGroup,
@@ -353,14 +360,23 @@ class AttendanceManager {
                         dates: this.dates,
                         attendance_data: this.attendanceData,
                         updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'group_name'
                     });
                 
-                if (error) throw error;
-                console.log('Zapisano do Supabase:', this.selectedGroup);
+                if (error) {
+                    console.error('Błąd Supabase:', error);
+                    throw error;
+                }
+                
+                console.log('Sukces! Zapisano do Supabase:', data);
+                this.showNotification('Dane zapisane do bazy!', 'success');
             } catch (error) {
                 console.error('Błąd zapisywania do Supabase:', error);
-                this.showNotification('Błąd zapisywania danych!', 'error');
+                this.showNotification('Błąd zapisywania danych: ' + error.message, 'error');
             }
+        } else {
+            console.log('Brak wybranej grupy - nie zapisuję do Supabase');
         }
     }
 
